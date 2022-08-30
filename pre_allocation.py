@@ -108,11 +108,10 @@ class Solution:
             self.isOK(tidyDistribution)
             return tidyDistribution
 
-        if self.prepack > self.own:
-            if sum(self.wants) <= self.own:
-                self.explanation += f"1. prepack={self.prepack}, 库存量={self.own}，各地区声明需求={self.wants}, 不满足一个prepack，但可cover所有地区需求.\n"
-                self.ok = True
-                return self.wants
+        if sum(self.wants) <= self.own:
+            self.explanation += f"1. prepack={self.prepack}, 库存量={self.own}，各地区声明需求={self.wants}, 可直接cover所有地区需求.\n"
+            self.ok = True
+            return self.wants
 
         # 初次整理温饱线和贪婪线
         dyingRegions, greedyRegions = self.sortDyingRegions()
@@ -149,6 +148,7 @@ class Solution:
             self.isOK(tidyDistribution)
             return tidyDistribution
 
+        # 考虑：这部分可以删去，self.own可满足所有地区需求self.wants
         for val, index, _ in greedyRegions:
             self.distribution[index] = self.distribution.get(index, 0) + val
 
