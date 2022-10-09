@@ -1,17 +1,26 @@
 import math
-from typing import List
+from typing import List, Dict
 
 
 class Solution:
-    def __init__(self, needs: List[int], wants: List[int], prepack: int, own: int):
+    """
+    needs: 各地区温饱线
+    wants: 各地区需求声明
+    prepack: package unit
+    own: 总供应值
+    in_transit: in transit运货量: Late, Wn, Wn+1, Wn+2, 分别对应未到量 本周量 下周量 下下周量，[[Wn+1, Late + Wn + Wn+1], [Wn+2, Wn+2]}
+    """
+    def __init__(self, needs: List[int], wants: List[int], prepack: int, own: int, in_transit: list[list[str, int]]):
         self.needs = needs
         self.wants = wants
         self.prepack = prepack
         self.own = own
+        self.in_transit = in_transit
 
         self.distribution = {}
         self.explanation = ""
-        self.ok = False
+        self.ok = True
+        self.note = ""
 
     def sortDyingRegions(self) -> tuple[list[list[int, int, float]], list[list[int, int, float]]]:
         """
@@ -63,7 +72,7 @@ class Solution:
         for i in range(len(proportion)):
             proportion[i][0] = int(proportion[i][0])
             if regions[i][2] < proportion[i][0] + 1:
-                # greddyRegions，+1的话会超过需求值的proportionLimit
+                # greedyRegions，+1的话会超过需求值的proportionLimit
                 fl -= regions[i][2] - proportion[i][0]
                 if fl < 0:
                     continue
@@ -98,25 +107,26 @@ class Solution:
                 allZero = False
                 break
         if allZero:
-            self.explanation += f"1. 没有地区声明需求，不进行任何分配.\n"
-            self.ok = True
+            self.addNotes(self.wants, self.own)
+            self.explanation += f"1. 没有地区声明需求, 不进行任何分配.\n"
             return [0] * len(self.needs)
 
         if self.own <= 0:
-            self.explanation += f"1. 当前库存量为0, 不进行任何分配.\n"
             tidyDistribution = [0] * len(self.needs)
-            self.isOK(tidyDistribution)
+            shortageList = self.addNotes(tidyDistribution, 0)
+            self.explanation += f"1. 当前库存量为0, 不进行任何分配. 未满足分配{shortageList}. in transit={self.in_transit}, 备注为{self.note}\n"
             return tidyDistribution
 
         if sum(self.wants) <= self.own:
-            self.explanation += f"1. prepack={self.prepack}, 库存量={self.own}，各地区声明需求={self.wants}, 可直接cover所有地区需求.\n"
-            self.ok = True
+            remaining = self.own - sum(self.wants)
+            self.addNotes(self.wants, remaining)
+            self.explanation += f"1. prepack={self.prepack}, 库存量={self.own}, 各地区声明需求={self.wants}, 满足分配. 剩余库存{remaining}.\n "
             return self.wants
 
         # 初次整理温饱线和贪婪线
         dyingRegions, greedyRegions = self.sortDyingRegions()
         tidyDying, tidyGreedy = self.prettyPrintRegions(dyingRegions), self.prettyPrintRegions(greedyRegions)
-        self.explanation += f"1. 初次规整，prepack={self.prepack}, 库存量={self.own}, 各地区声明需求={self.wants}, 实际需求={self.needs}, 温饱线={tidyDying}, 当前贪婪线={tidyGreedy}.\n"
+        self.explanation += f"1. 初次规整，prepack={self.prepack}, 库存量={self.own}, 各地区声明需求={self.wants}, 实际需求={self.needs}, 温饱线={tidyDying}, 当前贪婪线={tidyGreedy}.\n "
 
         dyingTotal = 0
         for val, _, _ in dyingRegions:
@@ -126,8 +136,8 @@ class Solution:
             rounding = self.getRounding(self.own, dyingRegions)
             remaining = self.updateDistribution(rounding)
             tidyDistribution = self.prettyPrintDistribution()
-            self.explanation += f"2. 库存量仅能先满足温饱线，最终分配表为{tidyDistribution}, 剩余库存{remaining}.\n"
-            self.isOK(tidyDistribution)
+            shortageList = self.addNotes(tidyDistribution, remaining)
+            self.explanation += f"2. 库存量仅能先满足温饱线, 最终分配表为{tidyDistribution}, 未满足分配{shortageList}, 剩余库存{remaining}. in transit={self.in_transit}, 备注为{self.note}\n"
             return tidyDistribution
 
         rounding = self.getRounding(dyingTotal, dyingRegions)
@@ -135,7 +145,7 @@ class Solution:
         greedyRegions = self.sortGreedyRegions(greedyRegions)
         tidyDistribution = self.prettyPrintDistribution()
         tidyGreedy = self.prettyPrintRegions(greedyRegions)
-        self.explanation += f"2. 温饱线分配完成，当前分配表为{tidyDistribution}, 剩余库存{remaining}，更新贪婪线并进行分配={tidyGreedy}.\n"
+        self.explanation += f"2. 温饱线分配完成, 当前分配表为{tidyDistribution}, 剩余库存{remaining}，更新贪婪线并进行分配={tidyGreedy}.\n"
 
         greedyTotal = 0
         for val, _, _ in greedyRegions:
@@ -144,8 +154,8 @@ class Solution:
             greedyRounding = self.getRounding(remaining, greedyRegions)
             greedyRemaining = self.updateDistribution(greedyRounding)
             tidyDistribution = self.prettyPrintDistribution()
-            self.explanation += f"3. 贪婪线分配完成，最终分配表为{tidyDistribution}, 剩余库存{greedyRemaining}.\n"
-            self.isOK(tidyDistribution)
+            shortageList = self.addNotes(tidyDistribution, greedyRemaining)
+            self.explanation += f"3. 贪婪线分配完成, 最终分配表为{tidyDistribution}, 未满足分配{shortageList}, 剩余库存{greedyRemaining}. in transit={self.in_transit}, 备注为{self.note}\n"
             return tidyDistribution
 
         # 考虑：这部分可以删去，self.own可满足所有地区需求self.wants
@@ -155,10 +165,9 @@ class Solution:
         total = 0
         for key, val in self.distribution.items():
             total += val
-        lastRemaning = self.own - total
+        lastRemaining = self.own - total
         tidyDistribution = self.prettyPrintDistribution()
-        self.explanation += f"3. 贪婪线分配完成，最终分配表为{tidyDistribution}，剩余库存{lastRemaning}.\n"
-        self.isOK(tidyDistribution)
+        self.explanation += f"3. 贪婪线分配完成, 最终分配表为{tidyDistribution}, 全部满足分配. 剩余库存{lastRemaining}.\n"
         return tidyDistribution
 
     def prettyPrintRegions(self, regions: list[list[int, int, float]]) -> List[int]:
@@ -179,23 +188,49 @@ class Solution:
             res[index] = round(proportion, 4)
         return res
 
-    def isOK(self, tidyDistribution: List[int]):
+    def addNotes(self, tidyDistribution: List[int], remaining: int) -> List[int]:
+        shortageList = [0] * len(self.wants)
         for i in range(len(tidyDistribution)):
-            want, allocated = self.wants[i], tidyDistribution[i]
-            if want > allocated:
-                self.ok = False
-                return
-        self.ok = True
-        return
+            want, distributed = self.wants[i], tidyDistribution[i]
+            if want > distributed:
+                shortageList[i] = want - distributed
+        shortage = sum(shortageList)
+        if shortage == 0:
+            self.note = "ok"
+            return shortageList
+
+        self.ok = False
+        # 判断下次availability规则：remaining, late, Wn, Wn+1, Wn+2的累加值与本周缺失量进行对比
+        # 如果Wn+2前能够cover，则为：av Wn
+        # 如果Wn+2!=0，且需要Wn+2的累加值才能cover：如果late=Wn=Wn+1=0，则为：av Wn+2；否则为av Wn+1 / Wn+2
+        total_available = remaining
+        for idx, (week, amount) in enumerate(self.in_transit):
+            if amount == 0:
+                continue
+            total_available += amount
+            if total_available >= shortage:
+                if idx == 0:
+                    # by the next week
+                    self.note = "av " + week
+                    return shortageList
+                if idx == 1:
+                    # by the week after next week
+                    if total_available == remaining + amount:
+                        # late = Wn = Wn+1 = 0
+                        self.note = "av " + week
+                    else:
+                        self.note = "av " + self.in_transit[0][0] + " / " + week
+        return shortageList
 
 
 if __name__ == "__main__":
     prepack = 800
-    own = 2800
-    needs = [-1600, -200, -800, 0, 0, 0, 0]
-    wants = [800, 800, 1200, 0, 0, 0, 0]
-    s = Solution(needs, wants, prepack, own)
+    own = 4800
+    needs = [-2400, -200, -800, 0, 0, 0, 0]
+    wants = [2400, 800, 1200, 0, 0, 0, 0]
+    s = Solution(needs, wants, prepack, own, [["W41", 0], ["W42", 2000]])
     res = s.getDistribution()
     print(res)
     print(s.explanation)
     print(s.ok)
+    print(s.note)
