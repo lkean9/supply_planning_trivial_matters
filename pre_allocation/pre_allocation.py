@@ -25,8 +25,7 @@ class Solution:
     def sortDyingRegions(self) -> tuple[list[list[int, int, float]], list[list[int, int, float]]]:
         """
         整理dyingRegions并排序，初次整理greedyRegions
-        如果存在小量greedy和大量dying，则可根据比例，将这些小量greedy变成dying
-        Region形式为[val, index, proportionLimit], dyingRegions[2] 暂时无用，设定为inf
+        Region形式为[val, index, proportionLimit], 首先计算温饱线时，如果self.own无法满足一个prepack，则不分配温饱线
         """
         dyingRegions = []
         greedyRegions = []
@@ -34,7 +33,12 @@ class Solution:
         for index, val in enumerate(self.needs):
             if self.wants[index] > 0:
                 if val > 0:
-                    dyingRegions.append([min(val, self.wants[index]), index, math.inf])
+                    realNeeds = min(val, self.wants[index])
+                    if self.own >= self.prepack:
+                        proportionLimit = realNeeds / self.prepack
+                        dyingRegions.append([realNeeds, index, proportionLimit])
+                    else:
+                        dyingRegions.append([realNeeds, index, math.inf])
                 else:
                     proportionLimit = self.wants[index] / self.prepack
                     greedyRegions.append([self.wants[index], index, proportionLimit])
@@ -69,10 +73,11 @@ class Solution:
         fl = 0
         for ratio, index in proportion:
             fl += ratio - int(ratio)
+            fl = (round(fl, 10))
         for i in range(len(proportion)):
             proportion[i][0] = int(proportion[i][0])
             if regions[i][2] < proportion[i][0] + 1:
-                # greedyRegions，+1的话会超过需求值的proportionLimit
+                # regions[i][2] = dyingRegions 或 greedyRegions的proportionLimit
                 fl -= regions[i][2] - proportion[i][0]
                 if fl < 0:
                     continue
@@ -90,8 +95,8 @@ class Solution:
         for packs, index in rounding:
             distributed += self.prepack * packs
             self.distribution[index] = self.distribution.get(index, 0) + packs * self.prepack
-        remaining = self.own - distributed
-        return int(remaining)
+        self.own = int(self.own - distributed)
+        return self.own
 
     def getDistribution(self) -> List[int]:
         """
@@ -211,25 +216,30 @@ class Solution:
             if total_available >= shortage:
                 if idx == 0:
                     # by the next week
-                    self.note = "av " + week
+                    self.note = "av " + week + " SG"
                     return shortageList
                 if idx == 1:
                     # by the week after next week
                     if total_available == remaining + amount:
                         # late = Wn = Wn+1 = 0
-                        self.note = "av " + week
+                        self.note = "av " + week + " SG"
                     else:
-                        self.note = "av " + self.in_transit[0][0] + " / " + week
-                self.note += " SG"
+                        self.note = "av " + self.in_transit[0][0] + " / " + week + " SG"
         return shortageList
 
 
 if __name__ == "__main__":
-    prepack = 800
-    own = 2800
-    needs = [-2400, -200, -800, 0, 0, 0, 0]
-    wants = [2400, 800, 1200, 0, 0, 0, 0]
-    s = Solution(needs, wants, prepack, own, [["W41", 0], ["W42", 2000]])
+    prepack = 440
+    own = 100
+    needs = [0, 0, -32, 0, 0, 85, 0]
+    wants = [0, 0, 2232, 0, 0, 145, 0]
+
+    prepack1 = 400
+    own1 = 200
+    needs1 = [0, 0, -100, 0, 0, 0, 0]
+    wants1 = [0, 0, 400, 0, 0, 0, 0]
+    # s = Solution(needs, wants, prepack, own, [["W45", 0], ["W46", 0]])
+    s = Solution(needs1, wants1, prepack1, own1, [["W45", 0], ["W46", 200]])
     res = s.getDistribution()
     print(res)
     print(s.explanation)
