@@ -220,12 +220,13 @@ class Solution:
                         self.note = "av " + week
                     else:
                         self.note = "av " + self.in_transit[0][0] + " / " + week
+                self.note += " SG"
         return shortageList
 
 
 if __name__ == "__main__":
     prepack = 800
-    own = 4800
+    own = 2800
     needs = [-2400, -200, -800, 0, 0, 0, 0]
     wants = [2400, 800, 1200, 0, 0, 0, 0]
     s = Solution(needs, wants, prepack, own, [["W41", 0], ["W42", 2000]])
